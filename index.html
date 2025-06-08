@@ -23,6 +23,7 @@
             color: #5f2c82;
             background: linear-gradient(90deg, #5f2c82, #49a09d);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             font-weight: 800;
             margin-bottom: 28px;
@@ -32,6 +33,7 @@
             justify-content: center;
             gap: 18px;
             margin-bottom: 24px;
+            flex-wrap: wrap;
         }
         button {
             background: linear-gradient(90deg, #43cea2 0%, #185a9d 100%);
@@ -120,12 +122,13 @@
     <div class="container" id="mainContainer">
         <h1>Grabador de Pantalla HD</h1>
         <div class="controls">
-            <button id="startBtn">Iniciar Grabación</button>
+            <button id="startBtn">Iniciar Grabación de Pantalla</button>
+            <button id="startMobileBtn">Grabar Cámara/Micrófono</button>
             <button id="pauseBtn" disabled>Pausar</button>
             <button id="resumeBtn" disabled style="display:none">Reanudar</button>
             <button id="stopBtn" disabled>Detener</button>
         </div>
-        <video id="preview" autoplay muted></video>
+        <video id="preview" autoplay muted playsinline></video>
         <video id="recorded" controls style="display:none"></video>
         <div class="edit-controls" style="display:none" id="editControls">
             <label>Inicio
@@ -147,6 +150,7 @@
     <script>
         let mediaRecorder, recordedChunks = [], stream;
         const startBtn = document.getElementById('startBtn');
+        const startMobileBtn = document.getElementById('startMobileBtn');
         const stopBtn = document.getElementById('stopBtn');
         const pauseBtn = document.getElementById('pauseBtn');
         const resumeBtn = document.getElementById('resumeBtn');
@@ -163,15 +167,9 @@
 
         preview.style.cursor = "none";
 
-        startBtn.onclick = async () => {
+        async function startRecording(getStreamFn) {
             try {
-                stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: {
-                        frameRate: { ideal: 60, max: 120 },
-                        cursor: "never"
-                    },
-                    audio: true
-                });
+                stream = await getStreamFn();
                 preview.srcObject = stream;
                 preview.style.display = '';
                 recorded.style.display = 'none';
@@ -201,6 +199,7 @@
                 };
                 mediaRecorder.start();
                 startBtn.disabled = true;
+                startMobileBtn.disabled = true;
                 stopBtn.disabled = false;
                 pauseBtn.disabled = false;
                 resumeBtn.disabled = true;
@@ -209,7 +208,24 @@
             } catch (e) {
                 msg.textContent = 'Permiso denegado o error al iniciar la grabación.';
             }
-        };
+        }
+
+        startBtn.onclick = () => startRecording(() =>
+            navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    frameRate: { ideal: 60, max: 120 },
+                    cursor: "never"
+                },
+                audio: true
+            })
+        );
+
+        startMobileBtn.onclick = () => startRecording(() =>
+            navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "user" },
+                audio: true
+            })
+        );
 
         stopBtn.onclick = () => {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -217,6 +233,7 @@
                 stream.getTracks().forEach(t => t.stop());
                 preview.srcObject = null;
                 startBtn.disabled = false;
+                startMobileBtn.disabled = false;
                 stopBtn.disabled = true;
                 pauseBtn.disabled = true;
                 resumeBtn.disabled = true;
@@ -276,6 +293,24 @@
 
         // Footer year
         document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Oculta el botón de pantalla en móviles donde getDisplayMedia no está disponible
+        if (!('getDisplayMedia' in (navigator.mediaDevices || {}))) {
+            startBtn.style.display = 'none';
+        }
+        // Oculta el botón de cámara en escritorio si no hay cámara
+        navigator.mediaDevices.enumerateDevices().then(devices => {
+            const hasCamera = devices.some(d => d.kind === 'videoinput');
+            if (!hasCamera) startMobileBtn.style.display = 'none';
+        });
+
+        // Detecta si es móvil y muestra mensaje si la grabación de pantalla no es soportada
+        function isMobile() {
+            return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        }
+        if (isMobile() && !('getDisplayMedia' in (navigator.mediaDevices || {}))) {
+            msg.textContent = 'La grabación de pantalla no es soportada en la mayoría de móviles. Puedes grabar usando la cámara y micrófono.';
+        }
     </script>
 </body>
 </html>
